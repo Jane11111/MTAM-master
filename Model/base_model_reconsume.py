@@ -1,0 +1,397 @@
+# -*- coding: utf-8 -*-
+# @Time    : 2020/10/20 22:38
+# @Author  : zxl
+# @FileName: base_model_reconsume.py
+
+
+
+import os
+from Model.Modules.net_utils import *
+from sklearn.metrics import roc_auc_score
+from util.model_log import create_log
+import time
+import math
+
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+#import tensorflow as tf2
+'''
+Base class of embedding module for all models.
+'''
+class base_model_reconsume(object):
+
+    def __init__(self, FLAGS, Embedding):
+
+        self.FLAGS = FLAGS
+        self.version = self.FLAGS.version
+        self.learning_rate = tf.placeholder(tf.float64, [], name="learning_rate")
+
+        # self.embedding = Embedding
+
+        # set the defalut check point path
+        if self.FLAGS.checkpoint_path_dir != None:
+            self.checkpoint_path_dir = self.FLAGS.checkpoint_path_dir
+
+        else:
+            self.checkpoint_path_dir = "data/check_point/" + self.FLAGS.type + "_" + self.FLAGS.experiment_type + "_" + self.version
+            if not os.path.exists(self.checkpoint_path_dir):
+                os.makedirs(self.checkpoint_path_dir)
+
+        self.init_optimizer()
+        self.embedding = Embedding
+        log_ins = create_log()
+        self.logger = log_ins.logger
+
+    def init_variables(self, sess, path, var_list=None):
+
+        sess.run(tf.global_variables_initializer())
+        sess.run(tf.local_variables_initializer())
+
+        if (self.FLAGS.load_type == "full"):
+            self.restore(sess, path=path)
+
+        elif (self.FLAGS.load_type == "fine_tune"):
+            # load graph get the last meta
+            path = self.FLAGS.fine_tune_load_path
+            meta_list = os.listdir(path)
+            for i in meta_list:
+                # os.path.splitext():分离文件名与扩展名
+                if os.path.splitext(i)[1] == '.meta':
+                    meta_file = i
+
+            meta_file_path = os.path.join(path, meta_file)
+            self.restore(sess, path=path, variable_list=var_list)
+
+        elif (self.FLAGS.load_type == "from_scratch"):
+            pass
+
+    def init_optimizer(self):
+        # Gradients and SGD update operation for training the model
+        if self.FLAGS.optimizer == 'adadelta':
+            self.opt = tf.train.AdadeltaOptimizer(learning_rate=self.learning_rate)
+        elif self.FLAGS.optimizer == 'adam':
+            self.opt = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+        elif self.FLAGS.optimizer == 'rmsprop':
+            self.opt = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
+        else:
+            self.opt = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
+
+    def build_model(self):
+        pass
+
+    '''The train process abstract class
+
+     Args:
+
+        sess: tensorflow sess
+        bathch_data: the batch data for embedding
+        add_summary:  whether to add summary
+
+     Returns:
+       loss and train op'''
+
+    # init reserved field table 0
+    # to look item lookup table
+    def init_reserved_field(self, sess):
+        # input_dic = self.embedding.make_feed_dic(batch_data=batch_data)
+
+        for key, values in self.embedding.embedding_dic.items():
+            table_name = key + "_emb_lookup_table"
+            now_emb_lookup_table = getattr(self.embedding, table_name)
+            # look_up_data = sess.run(now_emb_lookup_table,input_dic)
+            # print(look_up_data)
+            embedding_size = int(values[1])
+            assign_zero_op = tf.assign(now_emb_lookup_table[0], [0] * embedding_size)
+            sess.run(assign_zero_op)
+            # look_up_data = sess.run(now_emb_lookup_table,input_dic)
+            # print(look_up_data)
+
+    def save(self, sess, global_step=None, path=None, variable_list=None):
+        # print(self.global_step)
+
+        if path == None:
+            path = self.checkpoint_path_dir
+        # if not os.path.exists(path):
+        #     os.makedirs(path)
+
+        path = os.path.join(path, "model.ckpt")
+
+        saver = tf.train.Saver(var_list=variable_list)
+        save_path = saver.save(sess, save_path=path, global_step=global_step)
+
+        self.logger.info('model saved at %s' % save_path)
+
+    def restore(self, sess, path, variable_list=None, graph_path=None):
+        if graph_path != None:
+            saver = tf.train.import_meta_graph(graph_path)
+        else:
+            saver = tf.train.Saver(var_list=variable_list)
+
+        saver.restore(sess, tf.train.latest_checkpoint(path))
+        self.logger.info('model restored from %s' % path)
+
+    def train(self, sess, batch_data, learning_rate, add_summary=False, global_step=0, epoch=0):
+
+        time1 = time.time()
+        input_dic = self.embedding.make_feed_dic_new(batch_data=batch_data)
+        # time2 = time.time()
+        # self.logger.info("make embedding cost :" + str(time2 - time1))
+
+        input_dic[self.learning_rate] = learning_rate
+        input_dic[self.now_bacth_data_size] = len(batch_data)
+        output_feed = [self.loss, self.loss_origin,self.loss_reconsume , self.merged, self.train_op]
+
+        # time3 = time.time()
+        # self.logger.info("dict process cost :" + str(time3 - time2))
+
+        outputs = sess.run(output_feed, input_dic)
+        # time4 = time.time()
+        # self.logger.info("train process cost :" + str(time4 - time3))
+        return outputs[0], outputs[1], outputs[2],outputs[3]
+
+    def metrics(self, sess, batch_data, global_step, name):
+        # set reverse field 0
+        # self.init_reserved_field(sess)
+
+        input_dic = self.embedding.make_feed_dic(batch_data=batch_data)
+        y_hat, y = sess.run([self.y_hat, self.y], input_dic)
+        y_hat = y_hat.flatten()
+        y = y.flatten()
+        auc = roc_auc_score(y, y_hat)
+        summary = tf.Summary(value=[tf.Summary.Value(tag=name, simple_value=auc)])
+        self.train_writer.add_summary(summary, global_step=global_step)
+        return auc
+
+    '''
+    according to model generate new next item
+    to calculate recall rate or ndcg value
+    '''
+
+    def metrics_topK(self, sess, batch_data, global_step, topk):
+        # set reverse field 0
+        # self.init_reserved_field(sess)
+        # batch_data = batch_data[:10]
+        input_dic = self.embedding.make_feed_dic_new(batch_data=batch_data)
+        input_dic[self.now_bacth_data_size] = len(batch_data)
+        # item_lookup_table_T = tf.transpose(self.embedding.item_emb_lookup_table)
+        # item_result = tf.matmul(self.predict_behavior_emb, item_lookup_table_T)
+
+        item_result = self.item_result
+
+        # indices1 = tf.nn.top_k(item_result, 1).indices
+        # indices5 = tf.nn.top_k(item_result, 5).indices
+        # indices10 = tf.nn.top_k(item_result, 10).indices
+        # indices30 = tf.nn.top_k(item_result, 30).indices
+        # indices50 = tf.nn.top_k(item_result, 50).indices
+
+        indices1 = self.indices1
+        indices5 = self.indices5
+        indices10 = self.indices10
+        indices30 = self.indices30
+        indices50 = self.indices50
+
+        indices_result1, indices_result5, indices_result10, indices_result30, indices_result50, item_result \
+            = sess.run([indices1, indices5, indices10, indices30, indices50, item_result], input_dic)
+        result_item = input_dic[self.embedding.target_item_id]
+        length = len(batch_data)
+        hr_1, ndcg_1, _, _ = self.calculate_topK(1, indices_result1, result_item, global_step, length)
+        hr_5, ndcg_5, _, _ = self.calculate_topK(5, indices_result5, result_item, global_step, length)
+        hr_10, ndcg_10, hr_list, ndcg_list_10 = self.calculate_topK(10, indices_result10, result_item, global_step,
+                                                                    length)
+        hr_30, ndcg_30, _, _ = self.calculate_topK(30, indices_result30, result_item, global_step, length)
+        hr_50, ndcg_50, _, _ = self.calculate_topK(50, indices_result50, result_item, global_step, length)
+
+        # print(result_item)
+
+        return hr_1, ndcg_1, hr_5, ndcg_5, hr_10, ndcg_10, hr_30, ndcg_30, hr_50, ndcg_50, hr_list, ndcg_list_10
+
+    def calculate_topK(self, k, indices_result, result_item, global_step, length):
+        total_count = 0
+        recall_count = 0
+        ndcg_value_list = []
+        hr_list = []
+        for one_user_data in indices_result:
+            one_user_data = list(one_user_data)
+            # print(total_count)
+            # print(result_item)
+            # print(one_user_data)
+            if result_item[total_count] in one_user_data:
+                recall_count = recall_count + 1
+                hr_list.append(1)
+                for i in range(len(one_user_data)):
+                    if result_item[total_count] == one_user_data[i]:
+                        ndcg_value = math.log(2) / math.log(i + 2)
+                        ndcg_value_list.append(ndcg_value)
+                        break
+            else:
+                hr_list.append(0)
+                ndcg_value_list.append(0)
+
+            total_count = total_count + 1
+
+        recall_rate = recall_count / total_count
+
+        # the default ndcg value is 0
+        if len(ndcg_value_list) > 0:
+            avg_ndcg = float(sum(ndcg_value_list)) / length
+        else:
+            avg_ndcg = 0
+
+        return recall_rate, avg_ndcg, hr_list, ndcg_value_list
+    def metrics_classification(self, sess, batch_data, global_step, topk):
+        # set reverse field 0
+        # self.init_reserved_field(sess)
+        # batch_data = batch_data[:10]
+        input_dic = self.embedding.make_feed_dic_new(batch_data=batch_data)
+        input_dic[self.now_bacth_data_size] = len(batch_data)
+        # item_lookup_table_T = tf.transpose(self.embedding.item_emb_lookup_table)
+        # item_result = tf.matmul(self.predict_behavior_emb, item_lookup_table_T)
+
+
+
+
+        precision, recall = sess.run([self.precision,self.recall], input_dic)
+
+
+        return precision, recall
+
+    def metrics_topK_concat(self, sess, batch_data, global_step, topk):
+
+        input_dic = self.embedding.make_feed_dic_new(batch_data=batch_data)
+        input_dic[self.now_bacth_data_size] = len(batch_data)
+        item_lookup_table_T = tf.transpose(self.embedding.item_emb_lookup_table)
+        item_result = tf.matmul(self.predict_behavior_emb, self.output_w)
+        item_result = tf.matmul(item_result, item_lookup_table_T)
+        indices1 = tf.nn.top_k(item_result, 1).indices
+        indices5 = tf.nn.top_k(item_result, 5).indices
+        indices10 = tf.nn.top_k(item_result, 10).indices
+        indices30 = tf.nn.top_k(item_result, 30).indices
+        indices50 = tf.nn.top_k(item_result, 50).indices
+        indices_result1, indices_result5, indices_result10, indices_result30, indices_result50, item_result \
+            = sess.run([indices1, indices5, indices10, indices30, indices50, item_result], input_dic)
+        result_item = input_dic[self.embedding.target_item_id]
+        length = len(batch_data)
+        hr_1, ndcg_1, _, _ = self.calculate_topK(1, indices_result1, result_item, global_step, length)
+        hr_5, ndcg_5, _, _ = self.calculate_topK(5, indices_result5, result_item, global_step, length)
+        hr_10, ndcg_10, hr_list_10, ndcg_list_10 = self.calculate_topK(10, indices_result10, result_item, global_step,
+                                                                       length)
+        hr_30, ndcg_30, _, _ = self.calculate_topK(30, indices_result30, result_item, global_step, length)
+        hr_50, ndcg_50, _, _ = self.calculate_topK(50, indices_result50, result_item, global_step, length)
+
+        # print(result_item)
+
+        return hr_1, ndcg_1, hr_5, ndcg_5, hr_10, ndcg_10, hr_30, ndcg_30, hr_50, ndcg_50, hr_list_10, ndcg_list_10
+
+    def summery(self):
+
+        self.merged = tf.summary.merge_all()
+        timeArray = time.localtime(time.time())
+        timeStr = time.strftime("%Y-%m-%d--%H-%M-%S", timeArray)
+        filename = "data/tensorboard_result/"
+        type = self.FLAGS.type
+        experiment_type = self.FLAGS.experiment_type
+        version = self.FLAGS.version
+
+        filename = filename + type + "_" + experiment_type + "_" + version + "_" + timeStr
+        # Summary Writer
+        self.train_writer = tf.summary.FileWriter(filename + '/tensorboard_train')
+        self.eval_writer = tf.summary.FileWriter(filename + '/tensorboard_eval')
+
+    def cal_gradient(self, trainable_params):
+        # Compute gradients of self.loss_origin w.r.t. all trainable variables
+        gradients = tf.gradients(self.loss, trainable_params)
+        # Clip gradients by a given maximum_gradient_norm
+        clip_gradients, _ = tf.clip_by_global_norm(gradients, self.FLAGS.max_gradient_norm)
+        # Update the model
+        self.train_op = self.opt.apply_gradients(zip(clip_gradients, trainable_params))
+        self.summery()
+
+    def output(self):
+        with tf.name_scope('CrossEntropyLoss'):
+            l2_norm = tf.add_n([
+                tf.nn.l2_loss(self.item_list_emb),
+                tf.nn.l2_loss(self.category_list_emb),
+                tf.nn.l2_loss(self.position_list_emb),
+                tf.nn.l2_loss(self.user_embedding),
+                tf.nn.l2_loss(self.reconsume_lst_embedding)
+            ])
+            regulation_rate = self.FLAGS.regulation_rate
+            item_lookup_table_T = tf.transpose(self.embedding.item_emb_lookup_table)
+            '''
+            self.output_w = variable_scope.get_variable("output_w",
+                                                       shape=[self.num_units, self.num_units],
+                                                       dtype=self.predict_behavior_emb.dtype)
+            logits = tf.matmul(self.predict_behavior_emb, self.output_w)
+            '''
+
+
+
+
+            logits = tf.matmul(self.predict_behavior_emb, item_lookup_table_T)
+
+            row_idx = tf.reshape(tf.range(0, self.now_bacth_data_size, delta=1), [-1, 1])
+            row_idx = tf.tile(row_idx, [1, self.max_len])
+            row_idx = tf.reshape(row_idx, [-1, 1])
+
+            masks = tf.sequence_mask(self.seq_length, maxlen=self.max_len)
+            mask_item_list = tf.where(masks, self.item_list, (1 - tf.to_int32(masks)) * self.embedding.item_count)
+            col_idx = tf.reshape(mask_item_list, [-1, 1])
+
+
+
+            reconsume_scores = tf.sparse_to_dense(sparse_indices=tf.concat([row_idx, col_idx], axis=1),
+                                                 sparse_values=tf.reshape(self.reconsume_scores, [-1, ]),
+                                                 output_shape=(self.now_bacth_data_size, self.embedding.item_count+3),
+                                                 validate_indices=False)
+
+
+            # TODO 重新打分
+            predict_is_reconsume = tf.expand_dims(self.predict_is_reconsume, axis=-1)
+
+            logits = logits + predict_is_reconsume * reconsume_scores
+
+
+
+
+            self.item_result = logits  # TODO for speed
+            self.indices1 = tf.nn.top_k(self.item_result, 1).indices
+            self.indices5 = tf.nn.top_k(self.item_result, 5).indices
+            self.indices10 = tf.nn.top_k(self.item_result, 10).indices
+            self.indices30 = tf.nn.top_k(self.item_result, 30).indices
+            self.indices50 = tf.nn.top_k(self.item_result, 50).indices
+
+
+            log_probs = tf.nn.log_softmax(logits)
+            label_ids = tf.reshape(self.target[0], [-1])
+            one_hot_labels = tf.one_hot(
+                label_ids, depth=self.embedding.item_count + 3, dtype=tf.float32)
+            self.loss_origin = -tf.reduce_sum(log_probs * one_hot_labels, axis=[-1])
+
+
+            """
+            loss reconsume
+            """
+            predict_is_reconsume = tf.reshape(self.predict_is_reconsume,[-1,1])
+            predict_is_reconsume = tf.concat([1-predict_is_reconsume,predict_is_reconsume],axis=-1)
+
+            reconsume_labels = tf.one_hot(
+                tf.to_int32(self.is_reconsume),  depth = 2 , dtype=tf.float32)
+            self.loss_reconsume = tf.nn.softmax_cross_entropy_with_logits(labels = reconsume_labels,logits=predict_is_reconsume)
+
+            predictions = tf.argmax(predict_is_reconsume,axis=-1,output_type=tf.int32)
+
+            self.precision = tf.metrics.precision(labels=self.is_reconsume,predictions=predictions)
+            self.recall = tf.metrics.recall(labels=self.is_reconsume,predictions=predictions)
+
+            self.loss = regulation_rate * l2_norm + tf.reduce_mean(self.loss_origin) +\
+                         tf.reduce_mean(self.loss_reconsume)
+            # self.loss = regulation_rate * l2_norm + tf.reduce_mean(self.loss_origin)
+            # tf.summary.scalar('l2_norm', l2_norm)
+
+            tf.summary.scalar('Training Cross Entropy Loss', tf.reduce_mean(self.loss_origin))
+            tf.summary.scalar('Training Reconsume Loss', tf.reduce_mean(self.loss_reconsume))
+            tf.summary.scalar('normalized Training Loss', self.loss)
+            tf.summary.scalar('l2_norm', l2_norm)
+            tf.summary.scalar('Learning_rate', self.learning_rate)
+        self.cal_gradient(tf.trainable_variables())
+
