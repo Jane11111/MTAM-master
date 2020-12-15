@@ -90,13 +90,19 @@ class Get_origin_data_base():
 
         else:
             item_filter = data.groupby("item_id").count()
-            item_filter = item_filter[item_filter['user_id'] >= 30]
-            #item_filter = item_filter[item_filter['user_id'] >= 10]
+
+            if self.type != 'taobaoapp':
+                item_filter = item_filter[item_filter['user_id'] >= 30]
+                #item_filter = item_filter[item_filter['user_id'] >= 10]
+            else:
+                item_filter = item_filter[item_filter['user_id'] >=50]
+
+
             data = data[
                 data['item_id'].isin(item_filter.index)]
             # filtering user < 2
             user_filter = data.groupby("user_id").count()
-            if self.type == 'elec':
+            if self.type == 'elec' or self.type == 'order' or self.type == 'movie_tv':
                 #user_filter = user_filter[user_filtermovielen['item_id'] >= 20]
                 user_filter = user_filter[user_filter['item_id'] >= 20]
             else :
