@@ -215,7 +215,7 @@ class prepare_data_base():
         #self.target_random_value
 
         # make origin data dir
-        self.dataset_path = 'data/training_testing_data/' + self.type + "_" + \
+        self.dataset_path = '/home/zxl/project/MTAM-t2/data/training_testing_data/' + self.type + "_" + \
                                   self.FLAGS.pos_embedding + "_" +      \
                                   self.FLAGS.experiment_data_type+'_' + \
                                   self.FLAGS.causality
@@ -225,6 +225,7 @@ class prepare_data_base():
 
 
         self.dataset_class_pkl = os.path.join(self.dataset_path,'parameters.pkl')
+        # self.dataset_class_train = os.path.join(self.dataset_path,'train_data.txt')
         self.dataset_class_train = os.path.join(self.dataset_path,'train_data.txt')
         self.dataset_class_test = os.path.join(self.dataset_path,'test_data.txt')
         self.dataset_class_dev = os.path.join(self.dataset_path, 'dev_data.txt')
@@ -249,14 +250,14 @@ class prepare_data_base():
                 for line in L:
                     line = list(eval(line))
 
-                    if FLAGS.experiment_type == 'FGNN':
-                        line = self.process_graph_matrix_FGNN(line )
-                    else:
-                        line = self.process_graph_matrix(line)
+                    # if FLAGS.experiment_type == 'FGNN':
+                    #     line = self.process_graph_matrix_FGNN(line )
+                    # else:
+                    #     line = self.process_graph_matrix(line)
 
                     self.train_set.append(line)
-                    if len(self.train_set) > 500 :
-                        break
+                    # if len(self.train_set) > 500 :
+                    #     break
 
 
             # load test data
@@ -266,17 +267,17 @@ class prepare_data_base():
                 for line in L:
                     line = list(eval(line))
 
-                    if FLAGS.experiment_type == 'FGNN':
-                        line = self.process_graph_matrix_FGNN(line )
-                    else:
-                        line = self.process_graph_matrix(line )
+                    # if FLAGS.experiment_type == 'FGNN':
+                    #     line = self.process_graph_matrix_FGNN(line )
+                    # else:
+                    #     line = self.process_graph_matrix(line )
 
                     self.test_set.append(line)
 
-                    # if len(self.test_set) >= 20000:
-                    #     break
-                    if len(self.test_set) >= 200 :
+                    if len(self.test_set) >= 20000:
                         break
+                    # if len(self.test_set) >= 200 :
+                    #     break
                         # load test data
             with open(self.dataset_class_dev, 'r') as f:
                 self.dev_set = []
@@ -284,17 +285,17 @@ class prepare_data_base():
                 for line in L:
                     line = list(eval(line))
 
-                    if FLAGS.experiment_type == 'FGNN':
-                        line = self.process_graph_matrix_FGNN(line)
-                    else:
-                        line = self.process_graph_matrix(line)
+                    # if FLAGS.experiment_type == 'FGNN':
+                    #     line = self.process_graph_matrix_FGNN(line)
+                    # else:
+                    #     line = self.process_graph_matrix(line)
 
                     self.dev_set.append(line)
 
-                    # if len(self.dev_set) >= 20000:
-                    #     break
-                    if len(self.dev_set) >= 200:
+                    if len(self.dev_set) >= 20000:
                         break
+                    # if len(self.dev_set) >= 200:
+                    #     break
 
             with open(self.dataset_class_pkl, 'rb') as f:
 
@@ -387,6 +388,11 @@ class prepare_data_base():
         self.dev_set = []
 
         self.now_count = 0
+        for user_id, group_df in self.origin_data.groupby(['user_id']):
+            l = group_df.shape[0]
+            print(l)
+            if l <=2:
+                print('------------------------found--------------------------')
 
         #data_handle_process为各子类都使用的函数
         self.origin_data.groupby(["user_id"]).filter(lambda x: self.data_handle_process(x))
@@ -421,8 +427,7 @@ class prepare_data_base():
 
     def data_handle_process_base(self, x):
         behavior_seq = copy.deepcopy(x)
-        if self.FLAGS.remove_duplicate == True:
-            behavior_seq = behavior_seq.drop_duplicates(keep="last")
+
 
         behavior_seq = behavior_seq.sort_values(by=['time_stamp'], na_position='first')
         behavior_seq = behavior_seq.reset_index(drop=True)
@@ -451,6 +456,7 @@ class prepare_data_base():
         behavior_seq = behavior_seq.reset_index(drop=True)
         return behavior_seq
 
+
     #给出基本操作
     def data_handle_process(self, x):
         if np.random.randint(0, 100) < 2:
@@ -466,6 +472,10 @@ class prepare_data_base():
 
         mask_data_process_ins.get_mask_index_list_behaivor()
         #根据测试训练的比例 来划分
+        dev_count  = 0
+        test_count = 0
+        if len(mask_data_process_ins.mask_index_list) == 1:
+            print(mask_data_process_ins.mask_index_list)
 
         for index in mask_data_process_ins.mask_index_list:
 
@@ -504,31 +514,30 @@ class prepare_data_base():
             target_id = mask_data_process_ins.item_seq[index]
             target_category = self.item_category_dic[mask_data_process_ins.item_seq[index]]
 
+
             #以小时为准
             if   index == len(mask_data_process_ins.mask_index_list):
                 self.test_set.append((user_id, item_seq_temp, cat_list, time_list,
                                       timelast_list, timenow_list, position_list,
                                       [target_id, target_category, target_time],
-                                      len(item_seq_temp)))
+                                      len(item_seq_temp) ))
+                test_count +=1
             elif   index == len(mask_data_process_ins.mask_index_list)-1:
                 self.dev_set.append((user_id, item_seq_temp, cat_list, time_list,
                                       timelast_list, timenow_list, position_list,
                                       [target_id, target_category, target_time],
-                                      len(item_seq_temp)))
+                                      len(item_seq_temp ) ))
+                dev_count +=1
             else:
-                '''
-                if np.random.randint(0,20)<2:
-                    self.test_set.append((user_id, item_seq_temp, cat_list, time_list,
-                                          timelast_list, timenow_list, position_list,
-                                          [target_id, target_category, target_time],
-                                          len(item_seq_temp)))
-                else:'''
+
 
                 self.train_set.append((user_id, item_seq_temp, cat_list, time_list,
                                        timelast_list, timenow_list, position_list,
                                        [target_id, target_category, target_time],
-                                       len(item_seq_temp)))
-
+                                       len(item_seq_temp) ))
+        # print('i am here.....')
+        # if len(mask_data_process_ins.mask_index_list) == 1:
+        #     print(mask_data_process_ins.mask_index_list)
 
     def format_train_test(self):
         pass

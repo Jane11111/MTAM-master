@@ -4,7 +4,7 @@ from Prepare.mask_data_process import mask_data_process
 from config.model_parameter import model_parameter
 from util.model_log import create_log
 from DataHandle.get_origin_data import Get_origin_data
-
+import pandas as pd
 np.random.seed(1234)
 
 
@@ -88,13 +88,17 @@ if __name__ == "__main__":
     # logger.info("The model parameter is :" + str(self.FLAGS._parse_flags()))
 
     # init data and embeding
-    get_origin_data_ins = Get_origin_data(type = FLAGS.type,
-                                          raw_data_path= FLAGS.raw_data_path,
-                                          raw_data_path_meta = FLAGS.raw_data_path_meta,
-                                          logger= logger)
+    # get_origin_data_ins = Get_origin_data(type = FLAGS.type,
+    #                                       raw_data_path= FLAGS.raw_data_path,
+    #                                       raw_data_path_meta = FLAGS.raw_data_path_meta,
+    #                                       logger= logger)
+    root = '/home/zxl/project/MTAM-t2/data/orgin_data/'
+    data_path =root+'music.csv'
+    origin_data_df = pd.read_csv(data_path)
+
 
     # get_train_test_ins = Get_train_test(FLAGS=self.FLAGS,origin_data=get_origin_data_ins.origin_data)
-    prepare_data_top_ins = prepare_data_top_pop(FLAGS, get_origin_data_ins.origin_data)
+    prepare_data_top_ins = prepare_data_top_pop(FLAGS, origin_data_df)
     prepare_data_top_ins.get_top_pop_result()
 
 

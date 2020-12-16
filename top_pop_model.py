@@ -8,6 +8,8 @@ from DataHandle.get_origin_data_movielen import Get_movie_data
 from DataHandle.get_origin_data_taobao import Get_taobaoapp_data
 from DataHandle.get_origin_data_tmall import Get_tmall_data
 from DataHandle.get_origin_data_yoochoose import Get_yoochoose_data
+from DataHandle.get_origin_data_amazon_movie_tv import Get_amazon_data_movie_tv
+from DataHandle.get_origin_data_tmall_buy import Get_tmall_buy_data
 from Prepare.mask_data_process import mask_data_process
 from Prepare.prepare_data_base import prepare_data_base
 from config.model_parameter import model_parameter
@@ -65,7 +67,7 @@ class top_pop_model():
 
             result_dic_count = {}
 
-            one_item_list = copy.deepcopy(onedata[1])
+            one_item_list = copy.deepcopy(onedata[1]  )
             if len(one_item_list)==0:
                 error +=1
                 print(onedata)
@@ -81,6 +83,7 @@ class top_pop_model():
 
             result_dic_count = sorted(result_dic_count.items(), key=lambda item: item[1],reverse=True)
             result_dic_count = [x[0] for x in result_dic_count][:topk]
+
             if label in result_dic_count:
                 recall_count = recall_count + 1
 
@@ -104,7 +107,7 @@ if __name__ == "__main__":
     model_parameter_ins = model_parameter()
     experiment_name = model_parameter_ins.flags.FLAGS.experiment_name
     FLAGS = model_parameter_ins.get_parameter(experiment_name).FLAGS
-    FLAGS.type = sys.argv[1]
+    FLAGS.type = 'movielen'
 
     log_ins = create_log(type=FLAGS.type, experiment_type=FLAGS.experiment_type,
                          version=FLAGS.version)
@@ -140,11 +143,17 @@ if __name__ == "__main__":
     elif FLAGS.type == 'taobaoapp':
         get_origin_data_ins = Get_taobaoapp_data(FLAGS=FLAGS)
         get_origin_data_ins.getDataStatistics()
+    elif FLAGS.type == 'movie_tv':
+        get_origin_data_ins = Get_amazon_data_movie_tv(FLAGS=FLAGS)
+        get_origin_data_ins.getDataStatistics()
+    elif FLAGS.type == 'tmall_buy':
+        get_origin_data_ins = Get_tmall_buy_data(FLAGS=FLAGS)
+        get_origin_data_ins.getDataStatistics()
 
     # get_train_test_ins = Get_train_test(FLAGS=self.FLAGS,origin_data=get_origin_data_ins.origin_data)
     prepare_data_behavior_ins = prepare_data_base(FLAGS, get_origin_data_ins.origin_data)
     prepare_data_behavior_ins.map_process()
-    train_set, test_set = prepare_data_behavior_ins.get_train_test()
+    train_set, test_set ,dev_set= prepare_data_behavior_ins.get_train_test()
 
     # fetch part of test_data
     # if len(self.test_set) > 10000:
@@ -154,16 +163,16 @@ if __name__ == "__main__":
     logger.info('DataHandle Process.\tCost time: %.2fs' % (time.time() - start_time))
     start_time = time.time()
 
-    top_pop_ins = top_pop_model(train_set,prepare_data_behavior_ins)
+    top_pop_ins = top_pop_model(test_set,prepare_data_behavior_ins)
     top_pop_ins.cal_p_pop(1)
     top_pop_ins.cal_p_pop(5)
     top_pop_ins.cal_p_pop(10)
-    top_pop_ins.cal_p_pop(30)
+    top_pop_ins.cal_p_pop(20)
     top_pop_ins.cal_p_pop(50)
 
     top_pop_ins.cal_top_pop(1)
     top_pop_ins.cal_top_pop(5)
     top_pop_ins.cal_top_pop(10)
-    top_pop_ins.cal_top_pop(30)
+    top_pop_ins.cal_top_pop(20)
     top_pop_ins.cal_top_pop(50)
 

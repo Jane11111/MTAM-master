@@ -12,15 +12,7 @@ from Model.Modules.net_utils import gather_indexes,layer_norm
 
 class modified_gated_GNN( ):
 
-    def cosine(self,a, b):
 
-        mul_val = tf.matmul(a, b, transpose_b=True)
-
-        sqrt_a = tf.sqrt(tf.reduce_sum(a * a, axis=-1, keepdims=True))
-        sqrt_b = tf.expand_dims(tf.sqrt(tf.reduce_sum(b * b, axis=-1)), axis=1)
-        res = mul_val / (sqrt_a * sqrt_b + 1e-8)
-
-        return res
 
     def generate_adj_emb(self, init_emb, now_batch_size, num_units, adj_in, adj_out):
         self.stdv = 1.0 / math.sqrt(num_units)
@@ -48,8 +40,6 @@ class modified_gated_GNN( ):
 
         pos_in_state = tf.matmul(self.in_weight , fin_state_in)
         pos_out_state = tf.matmul(self.out_weight , fin_state_out)
-
-
 
         # trans_pos_in_state = tf.layers.dense(pos_in_state, units = num_units,
         #                                      activation = tf.nn.relu,

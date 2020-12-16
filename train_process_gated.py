@@ -29,6 +29,10 @@ from DataHandle.get_origin_data_amazon_elec import Get_amazon_data_elec
 from DataHandle.get_origin_data_amazon_beauty import Get_amazon_data_beauty
 from DataHandle.get_origin_data_brightkite import Get_BrightKite_data
 from DataHandle.get_origin_data_order import Get_Order_data
+from DataHandle.get_origin_data_fs import Get_fs_data
+from DataHandle.get_origin_data_tmall_buy import Get_tmall_buy_data
+from DataHandle.get_origin_data_amazon_toys import Get_amazon_data_toys
+from DataHandle.get_origin_data_amazon_pet import Get_amazon_data_pet
 from config.model_parameter import model_parameter
 
 from Model.GNNRec import GNN_T_Gru,GNN_T_Att,TimeAwareSR_GNN
@@ -65,6 +69,9 @@ class Train_main_process:
         if self.FLAGS.type == "yoochoose_small":
             get_origin_data_ins =  Get_yoochoose_data_small(FLAGS=self.FLAGS)
             get_origin_data_ins.getDataStatistics()
+        if self.FLAGS.type == "fs":
+            get_origin_data_ins =  Get_fs_data(FLAGS=self.FLAGS)
+            get_origin_data_ins.getDataStatistics()
 
         elif self.FLAGS.type == "movielen":
             get_origin_data_ins =  Get_movie_data(FLAGS=self.FLAGS)
@@ -73,7 +80,8 @@ class Train_main_process:
 
         if self.FLAGS.type == "tmall":
             get_origin_data_ins =  Get_tmall_data(FLAGS=self.FLAGS)
-
+        if self.FLAGS.type == "tmall_buy":
+            get_origin_data_ins =  Get_tmall_buy_data(FLAGS=self.FLAGS)
 
         elif self.FLAGS.type == "movie_tv":
             get_origin_data_ins =  Get_amazon_data_movie_tv(FLAGS=self.FLAGS)
@@ -101,6 +109,10 @@ class Train_main_process:
             get_origin_data_ins.getDataStatistics()
         elif self.FLAGS.type == "order":
             get_origin_data_ins =  Get_Order_data(FLAGS=self.FLAGS)
+            get_origin_data_ins.getDataStatistics()
+
+        elif self.FLAGS.type == "toys":
+            get_origin_data_ins = Get_amazon_data_toys(FLAGS=self.FLAGS)
             get_origin_data_ins.getDataStatistics()
 
         #get_train_test_ins = Get_train_test(FLAGS=self.FLAGS,origin_data=get_origin_data_ins.origin_data)

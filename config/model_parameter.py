@@ -54,15 +54,15 @@ class model_parameter:
         self.flags.DEFINE_integer('gap_num', 6, 'sequence gap')
         self.flags.DEFINE_boolean('is_training', True, 'train of inference')
         # TODO step 2: dataset
-        self.flags.DEFINE_string('type', "yoochoose", 'raw date type')
+        self.flags.DEFINE_string('type', "toys", 'raw date type')
         # self.flags.DEFINE_string('experiment_type', "GatRnnRec", 'experiment date type, e.g. istsbp, pistrec')
         # self.flags.DEFINE_string('experiment_type', "GatedGrnnRec", 'experiment date type, e.g. istsbp, pistrec')
         # self.flags.DEFINE_string('experiment_type', "OrderedGatedGrnnRec", 'experiment date type, e.g. istsbp, pistrec')
-        # self.flags.DEFINE_string('experiment_type', "ModifiedGatedGrnnRec", 'experiment date type, e.g. istsbp, pistrec')
+        self.flags.DEFINE_string('experiment_type', "ModifiedGatedGrnnRec", 'experiment date type, e.g. istsbp, pistrec')
         # self.flags.DEFINE_string('experiment_type', "GC_SAN", 'experiment date type, e.g. istsbp, pistrec')
         # self.flags.DEFINE_string('experiment_type', "FGNN", 'experiment date type, e.g. istsbp, pistrec')
         # self.flags.DEFINE_string('experiment_type', "STAMP", 'experiment date type, e.g. istsbp, pistrec')
-        self.flags.DEFINE_string('experiment_type', "NARM", 'experiment date type, e.g. istsbp, pistrec')
+        # self.flags.DEFINE_string('experiment_type', "NARM", 'experiment date type, e.g. istsbp, pistrec')
         # self.flags.DEFINE_string('experiment_type', "SR_GNN", 'experiment date type, e.g. istsbp, pistrec')
         #TODO step 3: graph_step
         self.flags.DEFINE_integer('graph_step', 0, 'graph_step')
@@ -76,8 +76,8 @@ class model_parameter:
         self.flags.DEFINE_integer('max_length_seq', 50, 'the length of the seq ')
 
         #parameters about origin_data
-        self.flags.DEFINE_boolean('init_origin_data', False, 'whewher to initialize the raw data')
-        self.flags.DEFINE_boolean('init_train_data', False, 'whewher to initialize the origin data')
+        self.flags.DEFINE_boolean('init_origin_data', True, 'whewher to initialize the raw data')
+        self.flags.DEFINE_boolean('init_train_data', True, 'whewher to initialize the origin data')
         self.flags.DEFINE_integer('user_count_limit', 10000, "the limit of user")
         self.flags.DEFINE_string('causality', "unidirection", "the mask method")
         self.flags.DEFINE_string('pos_embedding', "time", "the method to embedding_beauty.csv pos")
